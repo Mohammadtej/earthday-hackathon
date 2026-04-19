@@ -25,4 +25,5 @@ urlpatterns = [
     path('zombie-tables/', views.zombie_tables_report, name='zombie_tables'),
     path('high-compute-list/', views.high_compute_list, name='high_compute_list'),
     path('high-compute-report/<str:query_id>/', views.high_compute_report, name='high_compute_report'),
+    path('accept-suggestion/', views.accept_suggestion, name='accept_suggestion'),
 ]

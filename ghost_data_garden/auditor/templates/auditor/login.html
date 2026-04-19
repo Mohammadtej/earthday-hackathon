@@ -2,23 +2,147 @@
 <html lang="en">
 <head>
     <title>Login - Snowflake Green Audit</title>
-    <style>body { font-family: Arial, sans-serif; padding: 2rem; }</style>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --border-color: #333;
+            --primary-green: #2ea043;
+            --primary-green-hover: #3fb950;
+            --danger: #d32f2f;
+        }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+            margin: 0;
+            padding: 2rem;
+        }
+        .login-card {
+            background-color: var(--card-bg);
+            padding: 40px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            max-width: 450px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        h2 { margin-top: 0; color: #fff; }
+        .btn {
+            background-color: var(--primary-green);
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1em;
+            transition: background-color 0.2s, transform 0.1s;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .btn:hover { background-color: var(--primary-green-hover); }
+        .btn:active { transform: scale(0.98); }
+        input[type="file"] {
+            background-color: #252525;
+            color: var(--text-color);
+            padding: 15px;
+            border: 2px dashed var(--border-color);
+            border-radius: 6px;
+            width: 85%;
+            margin-top: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        input[type="file"]:hover, input[type="file"]:focus {
+            border-color: var(--primary-green);
+            background-color: #2a2a2a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(46, 160, 67, 0.15);
+            outline: none;
+        }
+        input[type="file"]::file-selector-button {
+            background-color: var(--primary-green);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            margin-right: 15px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: var(--primary-green-hover);
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(46, 160, 67, 0.4);
+        }
+        .error-msg {
+            background-color: rgba(211, 47, 47, 0.1);
+            border-left: 4px solid var(--danger);
+            color: #ff8a80;
+            padding: 10px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        small { color: #888; display: block; margin-top: 25px; line-height: 1.5; }
+
+        /* Loading Overlay Styles */
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(18, 18, 18, 0.85); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .loader { text-align: center; }
+        .loader-circle { width: 80px; height: 80px; border-radius: 50%; background-color: var(--primary-green); margin: 0 auto 20px auto; animation: pulse 1.5s infinite ease-in-out; }
+        @keyframes pulse { 0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(46, 160, 67, 0.7); } 50% { transform: scale(1.2); box-shadow: 0 0 0 20px rgba(46, 160, 67, 0); } 100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(46, 160, 67, 0); } }
+        .loader-text { color: var(--text-color); font-size: 1.5em; font-weight: bold; letter-spacing: 2px; animation: blink 1.5s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
 </head>
 <body>
-    <h2>Upload Snowflake Credentials</h2>
-    <p>Please upload a JSON file containing your connection configurations.</p>
-    
-    {% if error %}
-        <p style="color:red; font-weight:bold;">{{ error }}</p>
-    {% endif %}
-    
-    <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        <input type="file" name="creds_file" accept=".json" required>
-        <br><br>
-        <button type="submit">Login to Dashboard</button>
-    </form>
-    
-    <p><small>Expected JSON format: {"user": "...", "password": "...", "account": "...", "warehouse": "...", "database": "...", "schema": "...", "role": "..."}</small></p>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loader">
+            <div class="loader-circle"></div>
+            <div id="loader-text" class="loader-text">Authenticating...</div>
+        </div>
+    </div>
+
+    <div class="login-card">
+        <h2>Snowflake Green Audit</h2>
+        <p>Please upload a JSON file containing your connection configurations.</p>
+        
+        {% if error %}
+            <div class="error-msg">{{ error }}</div>
+        {% endif %}
+        
+        <form method="post" enctype="multipart/form-data" onsubmit="showLoading('Authenticating with Snowflake...')">
+            {% csrf_token %}
+            <input type="file" name="creds_file" accept=".json" required>
+            <button type="submit" class="btn">Login to Dashboard</button>
+        </form>
+        
+        <small>Expected JSON format:</small>
+        <pre style="text-align: left; background-color: #0d1117; color: #c9d1d9; padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9em; font-family: Consolas, Monaco, monospace; overflow-x: auto; margin-top: 10px;"><code>{
+  "user": "...", 
+  "password": "...", 
+  "account": "...", 
+  "warehouse": "...", 
+  "database": "...", 
+  "schema": "...", 
+  "role": "..."
+}</code></pre>
+    </div>
+
+    <script>
+        function showLoading(message) {
+            document.getElementById('loader-text').innerText = message || 'Loading...';
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+    </script>
 </body>
 </html>

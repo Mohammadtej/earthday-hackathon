@@ -5,19 +5,134 @@
     <!-- Adding marked.js to render Markdown directly on the frontend -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; padding: 2rem; line-height: 1.6; }
-        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
+        :root {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --border-color: #333;
+            --primary-green: #2ea043;
+        }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            padding: 2rem; 
+            line-height: 1.6; 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            max-width: 1000px; 
+            margin: auto; 
+        }
+        a { color: var(--primary-green); text-decoration: none; font-weight: bold; }
+        a:hover { text-decoration: underline; }
+        hr { border: 0; height: 1px; background: var(--border-color); margin: 20px 0; }
+        
+        /* Styles for marked.js generated markdown */
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; background-color: #1e1e1e; border-radius: 6px; overflow: hidden; }
+        th, td { border: 1px solid var(--border-color); padding: 12px; text-align: left; }
+        th { background-color: #252525; color: var(--primary-green); cursor: pointer; user-select: none; transition: background-color 0.2s; }
+        th:hover { background-color: #2c2c2c; }
+        th::after { content: ' ↕'; float: right; color: #666; margin-left: 5px; font-size: 0.9em; }
+        th.sort-asc::after { content: ' ▲'; color: var(--primary-green); opacity: 1; }
+        th.sort-desc::after { content: ' ▼'; color: var(--primary-green); opacity: 1; }
+        pre { background-color: #0d1117; padding: 15px; border-radius: 6px; overflow-x: auto; border: 1px solid var(--border-color); }
+        code { font-family: Consolas, Monaco, monospace; color: #c9d1d9; }
+        h1, h2, h3 { color: #fff; }
+        
+        /* Tree Animation Styles */
+        .forest-container { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; justify-content: center; align-items: center; gap: 30px; font-size: 100px; z-index: 10000; pointer-events: none; }
+        .tree { animation: growTree 2.5s ease-out forwards; transform-origin: center center; }
+        .tree:nth-child(1) { animation-delay: 0s; }
+        .tree:nth-child(2) { animation-delay: 0.2s; font-size: 130px; }
+        .tree:nth-child(3) { animation-delay: 0.4s; }
+        
+        .co2-float { position: fixed; top: 50%; left: 50%; font-size: 50px; color: #3fb950; font-weight: bold; text-shadow: 0 4px 15px rgba(0,0,0,0.8); animation: floatUp 2.5s ease-out forwards; z-index: 10001; pointer-events: none; opacity: 0; white-space: nowrap; }
+        
+        @keyframes growTree { 0% { transform: scale(0); opacity: 0; } 20% { transform: scale(1.1); opacity: 1; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.2); opacity: 0; } }
+        @keyframes floatUp { 0% { transform: translate(-50%, -50%); opacity: 0; } 20% { transform: translate(-50%, -150%); opacity: 1; } 80% { transform: translate(-50%, -250%); opacity: 1; } 100% { transform: translate(-50%, -300%); opacity: 0; } }
+        
+        .btn-accept { background-color: var(--primary-green); color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 15px; display: inline-block; transition: all 0.2s; box-shadow: 0 4px 12px rgba(46, 160, 67, 0.3); }
+        .btn-accept:hover { background-color: var(--primary-green-hover); transform: translateY(-2px); }
     </style>
 </head>
 <body>
     <h2>{{ title }}</h2>
     <a href="{% url 'dashboard' %}">&larr; Back to Dashboard</a>
     <hr>
+    <form id="csrf-form" style="display: none;">{% csrf_token %}</form>
     <div id="content">Loading report...</div>
     <script>
         document.getElementById('content').innerHTML = marked.parse(`{{ report_content|escapejs }}`);
+
+        // Table Sorting Logic (Handles dynamic Markdown generated tables)
+        document.addEventListener('click', function(e) {
+            const th = e.target.closest('th');
+            if (!th) return;
+            
+            const table = th.closest('table');
+            if (!table) return;
+            
+            const tbody = table.querySelector('tbody') || table;
+            const dataRows = table.querySelector('tbody') ? 
+                Array.from(table.querySelectorAll('tbody tr')) : 
+                Array.from(table.querySelectorAll('tr')).slice(1);
+            
+            const index = Array.from(th.parentNode.children).indexOf(th);
+            const isAsc = th.classList.contains('sort-asc');
+            
+            table.querySelectorAll('th').forEach(el => el.classList.remove('sort-asc', 'sort-desc'));
+            th.classList.add(isAsc ? 'sort-desc' : 'sort-asc');
+            const dir = isAsc ? -1 : 1;
+            
+            dataRows.sort((a, b) => {
+                const aText = a.children[index].innerText.trim();
+                const bText = b.children[index].innerText.trim();
+                
+                // Check if sorting numbers (handles comma-separated strings and units like MB/GB)
+                const numRegex = /^-?[0-9.,]+(\s?(MB|GB|KB|Bytes|kg|%))?$/i;
+                if (numRegex.test(aText) && numRegex.test(bText)) {
+                    const aNum = parseFloat(aText.replace(/[^0-9.-]+/g, ""));
+                    const bNum = parseFloat(bText.replace(/[^0-9.-]+/g, ""));
+                    if (!isNaN(aNum) && !isNaN(bNum)) return (aNum - bNum) * dir;
+                }
+                return aText.localeCompare(bText, undefined, {numeric: true}) * dir;
+            });
+            
+            dataRows.forEach(row => tbody.appendChild(row));
+        });
+
+        // Inject Accept Suggestion button for High Compute Reports
+        if (window.location.href.includes('high-compute-report')) {
+            const preBlocks = document.querySelectorAll('#content pre');
+            if (preBlocks.length > 0) {
+                const lastPre = preBlocks[preBlocks.length - 1]; // Gemini places the final optimized query here
+                const btn = document.createElement('button');
+                btn.innerHTML = 'Accept Suggestion 🌱';
+                btn.className = 'btn-accept';
+                lastPre.parentNode.insertBefore(btn, lastPre.nextSibling);
+                
+                btn.addEventListener('click', function() {
+                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                    
+                    // Trigger the playful CSS Animations
+                    const forest = document.createElement('div');
+                    forest.className = 'forest-container';
+                    forest.innerHTML = '<div class="tree">🌲</div><div class="tree">🌳</div><div class="tree">🌲</div>';
+                    document.body.appendChild(forest);
+                    
+                    const text = document.createElement('div');
+                    text.className = 'co2-float';
+                    text.innerText = '+dChild(text);
+                    
+                    btn.style.display = 'none'; // Prevent double clicking
+
+                    // Update the metrics securely in the backend session
+                    fetch('/accept-suggestion/', {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' }
+                    }).then(res => res.json()).then(data => {
+                        if (data.saved) { text.innerText = '+irect after animation
+                    });
+                });
+            }
+        }
     </script>
 </body>
 </html>

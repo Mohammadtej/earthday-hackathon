@@ -3,25 +3,44 @@
 <head>
     <title>High Compute Queries</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 2rem; max-width: 1000px; margin: auto; line-height: 1.6; }
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --border-color: #333;
+            --primary-green: #2ea043;
+            --primary-green-hover: #3fb950;
+        }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            padding: 2rem; 
+            max-width: 1000px; 
+            margin: auto; 
+            line-height: 1.6; 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+        }
+        
+        a { color: var(--primary-green); text-decoration: none; font-weight: bold; }
+        a:hover { text-decoration: underline; }
+        hr { border: 0; height: 1px; background: var(--border-color); margin: 20px 0; }
         
         .query-card {
             position: relative;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             border-radius: 8px;
             margin-bottom: 20px;
             padding: 15px;
-            background-color: #f9f9f9;
+            background-color: var(--card-bg);
             transition: box-shadow 0.2s;
         }
         
-        .query-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
+        .query-card:hover { box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
         
         .query-text {
-            background-color: #2b2b2b;
-            color: #f8f8f2;
+            background-color: #0d1117;
+            color: #c9d1d9;
             padding: 15px;
             border-radius: 5px;
             font-family: Consolas, Monaco, monospace;
@@ -29,6 +48,7 @@
             word-break: break-word;
             max-height: 200px;
             overflow-y: auto;
+            border: 1px solid var(--border-color);
         }
         
         .query-actions {
@@ -43,29 +63,46 @@
         }
         
         .btn-report {
-            background-color: #007bff;
+            background-color: var(--primary-green);
             color: white;
             padding: 10px 15px;
             text-decoration: none;
             border-radius: 4px;
             font-weight: bold;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: background-color 0.2s;
         }
         
-        .btn-report:hover { background-color: #0056b3; }
-        .pagination { margin-top: 20px; font-weight: bold; }
+        .btn-report:hover { background-color: var(--primary-green-hover); text-decoration: none; }
+        .pagination { margin-top: 20px; font-weight: bold; text-align: center; }
+
+        /* Loading Overlay Styles */
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(18, 18, 18, 0.85); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .loader { text-align: center; }
+        .loader-circle { width: 80px; height: 80px; border-radius: 50%; background-color: var(--primary-green); margin: 0 auto 20px auto; animation: pulse 1.5s infinite ease-in-out; }
+        @keyframes pulse { 0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(46, 160, 67, 0.7); } 50% { transform: scale(1.2); box-shadow: 0 0 0 20px rgba(46, 160, 67, 0); } 100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(46, 160, 67, 0); } }
+        .loader-text { color: var(--text-color); font-size: 1.5em; font-weight: bold; letter-spacing: 2px; animation: blink 1.5s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loader">
+            <div class="loader-circle"></div>
+            <div id="loader-text" class="loader-text">Loading...</div>
+        </div>
+    </div>
+
     <h2>Top Inefficient Queries (Last 7 Days)</h2>
-    <a href="{% url 'dashboard' %}" style="text-decoration: none;">&larr; Back to Dashboard</a>
+    <a href="{% url 'dashboard' %}">&larr; Back to Dashboard</a>
     <hr>
 
     {% for query in page_obj %}
     <div class="query-card">
-        <p><strong>Query ID:</strong> {{ query.query_id }} | <strong>Bytes Scanned:</strong> {{ query.bytes_scanned }} | <strong>Time (ms):</strong> {{ query.total_elapsed_time }}</p>
+        <p><strong>Query ID:</strong> {{ query.query_id }} | <strong>Data Scanned:</strong> {{ query.bytes_scanned|filesizeformat }} | <strong>Time:</strong> {{ query.time_seconds }} seconds</p>
         <div class="query-actions">
-            <a href="{% url 'high_compute_report' query.query_id %}" class="btn-report">Get Optimization Report</a>
+            <a href="{% url 'high_compute_report' query.query_id %}" class="btn-report" onclick="showLoading('Generating Optimization Report...')">Get Optimization Report</a>
         </div>
         <pre class="query-text">{{ query.query_text }}</pre>
     </div>
@@ -74,5 +111,12 @@
     <div class="pagination">
         <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
     </div>
+
+    <script>
+        function showLoading(message) {
+            document.getElementById('loader-text').innerText = message || 'Loading...';
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+    </script>
 </body>
 </html>
