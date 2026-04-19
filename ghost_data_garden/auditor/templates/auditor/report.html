@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{ title }}</title>
+    <!-- Adding marked.js to render Markdown directly on the frontend -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 2rem; line-height: 1.6; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h2>{{ title }}</h2>
+    <a href="{% url 'dashboard' %}">&larr; Back to Dashboard</a>
+    <hr>
+    <div id="content">Loading report...</div>
+    <script>
+        document.getElementById('content').innerHTML = marked.parse(`{{ report_content|escapejs }}`);
+    </script>
+</body>
+</html>

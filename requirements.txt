@@ -1,5 +1,5 @@
 snowflake-connector-python
 google-genai 
 python-dotenv
-streamlit
+django
 pandas
