@@ -48,6 +48,35 @@
         @keyframes growTree { 0% { transform: scale(0); opacity: 0; } 20% { transform: scale(1.1); opacity: 1; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.2); opacity: 0; } }
         @keyframes floatUp { 0% { transform: translate(-50%, -50%); opacity: 0; } 20% { transform: translate(-50%, -150%); opacity: 1; } 80% { transform: translate(-50%, -250%); opacity: 1; } 100% { transform: translate(-50%, -300%); opacity: 0; } }
         
+        /* Styles for hover-actions on table rows */
+        .actionable-row {
+            position: relative; /* Needed for absolute positioning of children */
+        }   
+        .row-actions {
+            position: absolute;
+            right: 15px; /* Position on the right */
+            top: 50%;
+            transform: translateY(-50%);
+            display: none; /* Hidden by default */
+            background: #2c3e50;
+            padding: 5px;
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            z-index: 10;
+            gap: 8px; /* Space between buttons */
+        }
+        .actionable-row:hover .row-actions {
+            display: flex; /* Show on row hover */
+        }
+        .btn-action {
+            background-color: var(--primary-green);
+            color: white;
+            padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer;
+            font-size: 0.9em; font-weight: bold; white-space: nowrap;
+            transition: background-color 0.2s;
+        }
+        .btn-action:hover { background-color: #3fb950; }
+        
         .btn-accept { background-color: var(--primary-green); color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 15px; display: inline-block; transition: all 0.2s; box-shadow: 0 4px 12px rgba(46, 160, 67, 0.3); }
         .btn-accept:hover { background-color: var(--primary-green-hover); transform: translateY(-2px); }
     </style>
@@ -98,37 +127,111 @@
             dataRows.forEach(row => tbody.appendChild(row));
         });
 
+        function triggerAcceptAnimation(savedAmount, buttonsToHide, suggestionType, suggestionId) {
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            const payload = { 
+                saved_amount: savedAmount || 0,
+                suggestion_type: suggestionType,
+                suggestion_id: suggestionId
+            };
+            
+            // Trigger the playful CSS Animations
+            const forest = document.createElement('div');
+            forest.className = 'forest-container';
+            forest.innerHTML = '<div class="tree">🌲</div><div class="tree">🌳</div><div class="tree">🌲</div>';
+            document.body.appendChild(forest);
+            
+            const text = document.createElement('div');
+            text.className = 'co2-float';
+            text.innerText = '+...'; // Placeholder text
+            document.body.appendChild(text);
+            
+            if (buttonsToHide && buttonsToHide.length) {
+                buttonsToHide.forEach(btn => btn.style.display = 'none'); // Prevent double clicking
+            }
+
+            // Update the metrics securely in the backend session
+            fetch('/accept-suggestion/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(res => res.json()).then(data => {
+                if (data.saved !== undefined) { 
+                    text.innerText = `+${data.saved.toFixed(2)} kg CO₂ Saved!`; 
+                }
+                // Optional: redirect after animation, and clean up elements
+                setTimeout(() => {
+                    forest.remove();
+                    text.remove();
+                }, 2500);
+            });
+        }
+
         // Inject Accept Suggestion button for High Compute Reports
         if (window.location.href.includes('high-compute-report')) {
-            const preBlocks = document.querySelectorAll('#content pre');
+            const contentDiv = document.getElementById('content');
+            const preBlocks = contentDiv.querySelectorAll('pre');
             if (preBlocks.length > 0) {
                 const lastPre = preBlocks[preBlocks.length - 1]; // Gemini places the final optimized query here
                 const btn = document.createElement('button');
                 btn.innerHTML = 'Accept Suggestion 🌱';
                 btn.className = 'btn-accept';
                 lastPre.parentNode.insertBefore(btn, lastPre.nextSibling);
-                
-                btn.addEventListener('click', function() {
-                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-                    
-                    // Trigger the playful CSS Animations
-                    const forest = document.createElement('div');
-                    forest.className = 'forest-container';
-                    forest.innerHTML = '<div class="tree">🌲</div><div class="tree">🌳</div><div class="tree">🌲</div>';
-                    document.body.appendChild(forest);
-                    
-                    const text = document.createElement('div');
-                    text.className = 'co2-float';
-                    text.innerText = '+dChild(text);
-                    
-                    btn.style.display = 'none'; // Prevent double clicking
 
-                    // Update the metrics securely in the backend session
-                    fetch('/accept-suggestion/', {
-                        method: 'POST',
-                        headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' }
-                    }).then(res => res.json()).then(data => {
-                        if (data.saved) { text.innerText = '+irect after animation
+                // Extract CO2 savings from the report text
+                let savedAmount = 0;
+                const reportText = contentDiv.innerText;
+                const regex = /Projected Annual CO2 Saving \(kg\):\s*([0-9.]+)/i;
+                const match = reportText.match(regex);
+                if (match && match[1]) {
+                    savedAmount = parseFloat(match[1]);
+                }
+
+                const urlParts = window.location.pathname.split('/');
+                const queryId = urlParts[urlParts.length - 2];
+
+                btn.addEventListener('click', () => triggerAcceptAnimation(savedAmount, [btn], 'high_compute', queryId));
+            }
+        }
+
+        // Inject Archive/Drop buttons for Zombie Table Reports
+        if (window.location.href.includes('zombie-tables')) {
+            const table = document.querySelector('#content table');
+            if (table) {
+                const headers = Array.from(table.querySelectorAll('th')).map(th => th.innerText.trim());
+                const co2ColIndex = headers.findIndex(h => h.includes('Est. Annual CO2 Saving (kg)'));
+
+                const dataRows = table.querySelector('tbody') ? 
+                    Array.from(table.querySelectorAll('tbody tr')) : 
+                    Array.from(table.querySelectorAll('tr')).slice(1);
+
+                dataRows.forEach(row => {
+                    row.classList.add('actionable-row');
+
+                    const btnContainer = document.createElement('div');
+                    btnContainer.className = 'row-actions';
+                    btnContainer.innerHTML = `
+                        <button class="btn-action" title="Acknowledge Archive Suggestion">Archive 🗑️</button>
+                        <button class="btn-action" title="Acknowledge Drop Suggestion">Drop 💥</button>
+                    `;
+                    
+                    row.appendChild(btnContainer);
+
+                    const tableName = row.children[0] ? row.children[0].innerText.trim() : '';
+                    let savedAmount = 0;
+                    if (co2ColIndex !== -1 && row.children[co2ColIndex]) {
+                        savedAmount = parseFloat(row.children[co2ColIndex].innerText) || 0;
+                    }
+
+                    btnContainer.addEventListener('click', (e) => {
+                        const button = e.target.closest('.btn-action');
+                        if (button) {
+                            triggerAcceptAnimation(savedAmount, null, 'zombie_table', tableName); 
+                            
+                            row.style.opacity = '0.5';
+                            row.style.backgroundColor = '#252525';
+                            row.style.pointerEvents = 'none';
+                        }
                     });
                 });
             }

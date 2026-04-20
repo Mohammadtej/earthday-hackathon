@@ -102,7 +102,7 @@ def gather_statistics(request):
             print(type(tables))
 
             for row in tables:
-                row[2] = round(row[2] / (1024**2), 2)  # Convert bytes to GB for readability
+                row[2] = round(row[2] / (1024**2), 2)  # Convert bytes to MB for readability
             # Convert to JSON string handling datetime objects
             tables_json = json.dumps(tables, default=str)
 
@@ -113,6 +113,7 @@ def gather_statistics(request):
             # Clear previously cached reports and metrics so new data triggers a fresh analysis
             request.session.pop('zombie_report_content', None)
             request.session.pop('high_compute_queries', None) # Clear cached queries list
+            request.session.pop('acknowledged_zombie_tables', None)
             request.session.pop('zombie_tables_count', None)
             request.session.pop('compute_efficiency', None)
             conn.close()
@@ -153,6 +154,10 @@ def zombie_tables_report(request):
         cur.execute(zombie_sql)
         tables = cur.fetchall()
         
+        # Filter out tables that have already been acknowledged in this session
+        acknowledged_zombies = request.session.get('acknowledged_zombie_tables', [])
+        tables = [t for t in tables if t[0] not in acknowledged_zombies]
+
         if not tables:
             report_content = "Great news! No inactive 'Zombie' tables older than 30 days were found in this schema."
             request.session['zombie_report_content'] = report_content
@@ -163,15 +168,19 @@ def zombie_tables_report(request):
         # Format the list for Gemini (convert bytes to MB)
         table_details = [f"- Table: {t[0]} | Rows: {t[1]} | Size: {round(t[2]/(1024**2), 2)} MB | Last Accessed: {t[3]}" for t in tables]
         tables_str = "\n".join(table_details)
+
+        print(table_details)
         
         prompt = f"""
         You are a Database Carbon-Efficiency Expert. 
-        We have queried our Snowflake ACCOUNT_USAGE views and identified the following inactive "Zombie Tables" (unaltered in >30 days):
+        We have queried our Snowflake schema and identified the following inactive "Zombie Tables" (unaltered in >30 days):
         {tables_str}
-        
+
+        Use the heuristic that 1 GB of cloud storage emits approximately 0.7 kg of CO2 per year.
+
         Tasks:
         1. Explain briefly why retaining unused tables wastes storage/compute and emits unnecessary CO2.
-        2. Provide a report in a strict tabular format (Markdown) listing these tables with their actual rows, size, and "Last Accessed" date, and an "Action Recommendation" (e.g., Archive to S3, Drop).
+        2. Provide a report in a strict tabular format (Markdown). The table must include these columns: "Table Name", "Rows", "Size (MB)", "Last Altered", "Recommendation", and "Est. Annual CO2 Saving (kg)".
         """
         
         response = client.models.generate_content(
@@ -266,7 +275,7 @@ def high_compute_report(request, query_id):
         
         Tasks:
         1. Rewrite this SQL to be more 'Green' (e.g., add partitioning, prune columns, use better joins).
-        2. Explain the estimated percentage of energy/compute reduction and projected annual CO2 savings.
+        2. Explain the estimated percentage of energy/compute reduction and projected annual CO2 savings. **At the end of this section, include a line with the format `Projected Annual CO2 Saving (kg): [number]` where [number] is the estimated kilograms of CO2 saved per year.**
         3. Suggest if this data should be 'archived' (Ghost Data) if it's rarely used.
         4. Provide the final optimized SQL query in a single Markdown code block at the very end of your response.
         
@@ -287,16 +296,47 @@ def high_compute_report(request, query_id):
 def accept_suggestion(request):
     """Endpoint to handle accepting Gemini's green suggestion."""
     if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            saved_amount = float(data.get('saved_amount', 0))
+            suggestion_type = data.get('suggestion_type')
+            suggestion_id = data.get('suggestion_id')
+        except (json.JSONDecodeError, ValueError, TypeError):
+            saved_amount = 0.0
+            suggestion_type = None
+            suggestion_id = None
+
         co2_val = request.session.get('co2_saved', 0.0)
         if isinstance(co2_val, str):
             try:
                 co2_val = float(co2_val.replace(' kg/yr', '').replace(' kg', ''))
             except ValueError:
                 co2_val = 0.0
-        
-        # Add an annualized estimated CO2 saving (e.g., 2.5 kg per run * 365 days)
-        saved_amount = 912.5
+
         request.session['co2_saved'] = round(co2_val + saved_amount, 2)
-        
+
+        # Update other metrics based on the type of suggestion accepted
+        if suggestion_type == 'high_compute' and suggestion_id:
+            queries = request.session.get('high_compute_queries', [])
+            updated_queries = [q for q in queries if q.get('query_id') != suggestion_id]
+            
+            # If a query was acknowledged/removed, update the list and recalculate efficiency
+            if len(updated_queries) < len(queries):
+                request.session['high_compute_queries'] = updated_queries
+                efficiency = max(0, 100 - (len(updated_queries) * 2))
+                request.session['compute_efficiency'] = f"{efficiency}%"
+
+        elif suggestion_type == 'zombie_table' and suggestion_id:
+            # Decrement the live count for immediate dashboard feedback
+            current_count = request.session.get('zombie_tables_count', 0)
+            if isinstance(current_count, int) and current_count > 0:
+                request.session['zombie_tables_count'] = current_count - 1
+            
+            # Add the table to a session-persistent acknowledged list
+            acknowledged_list = request.session.get('acknowledged_zombie_tables', [])
+            if suggestion_id not in acknowledged_list:
+                acknowledged_list.append(suggestion_id)
+            request.session['acknowledged_zombie_tables'] = acknowledged_list
+
         return JsonResponse({'status': 'success', 'saved': saved_amount, 'total': request.session['co2_saved']})
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
