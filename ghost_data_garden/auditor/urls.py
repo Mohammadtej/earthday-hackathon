@@ -15,11 +15,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from django.views.generic.base import RedirectView
 from . import views
 
 urlpatterns = [
-    path('', views.login_view, name='login'),
+    path('', RedirectView.as_view(pattern_name='login', permanent=False), name='home'),
+    path('register/', views.register, name='register'),
+    path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('prestart/', views.start_view, name='prestart'),
     path('dashboard/', views.dashboard_view, name='dashboard'),
     path('gather-stats/', views.gather_statistics, name='gather_stats'),
     path('zombie-tables/', views.zombie_tables_report, name='zombie_tables'),

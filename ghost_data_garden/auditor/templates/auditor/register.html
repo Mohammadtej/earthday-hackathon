@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Login - Snowflake Green Audit</title>
+    <title>Register - Snowflake Green Audit</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -24,7 +24,7 @@
             margin: 0;
             padding: 2rem;
         }
-        .login-card {
+        .register-card {
             background-color: var(--card-bg);
             padding: 40px;
             border-radius: 8px;
@@ -50,21 +50,6 @@
         }
         .btn:hover { background-color: var(--primary-green-hover); }
         .btn:active { transform: scale(0.98); }
-        input[type="file"] {
-            background-color: #252525;
-            color: var(--text-color);
-            padding: 15px;
-            border: 2px dashed var(--border-color);
-            border-radius: 6px;
-            width: 85%;
-            margin-top: 15px;
-        }
-        input[type="file"]:hover, input[type="file"]:focus {
-            border-color: var(--primary-green);
-            background-color: #2a2a2a;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(46, 160, 67, 0.5);
-        }
         a { color: var(--primary-green); text-decoration: none; font-weight: bold; }
         a:hover { text-decoration: underline; }
         input[type="text"], input[type="password"], input[type="email"] {
@@ -76,25 +61,27 @@
             border-color: var(--primary-green); outline: none;
         }
         label { display: block; text-align: left; font-weight: bold; margin-bottom: 5px; }
+        .helptext { font-size: 0.8em; color: #888; display: block; text-align: left; margin-top: -10px; margin-bottom: 15px; }
         ul.errorlist { color: var(--danger); text-align: left; padding-left: 20px; font-size: 0.9em; }
     </style>
 </head>
 <body>
-    <div class="login-card">
-        <h2>Snowflake Green Audit</h2>
-        <p> Please use your email and password to login </p>
+    <div class="register-card">
+        <h2>Create an Account</h2>
+
         {% if messages %}
             {% for message in messages %}
                 <p style="color: red;">{{ message }}</p>
             {% endfor %}
         {% endif %}
-        <form action="{% url 'login' %}" method="post">
+
+        <form method="POST">
             {% csrf_token %}
             {{ form.as_p }}
-            <button type="submit" class="btn">Login</button>
+            <button type="submit" class="btn">Sign Up</button>
         </form>
 
-        <p>Don't have a account? <a href="{% url 'register' %}">Register here</a></p>
+        <p>Already have an account? <a href="{% url 'login' %}">Log in here</a></p>
     </div>
 </body>
 </html>

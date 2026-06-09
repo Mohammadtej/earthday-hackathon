@@ -1,17 +1,67 @@
 import json
 import os
+from django.contrib.auth import login, logout, authenticate
+from django.contrib.auth.decorators import login_required   
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 import snowflake.connector
 from google import genai
 from dotenv import load_dotenv
+from django.contrib import messages
+from .forms import CustomUserCreationForm, CustomLoginForm
 
 # Load the Gemini Key from .env (Snowflake creds will come from JSON upload now)
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+def login_view(request):
+    if request.user.is_authenticated:
+        return redirect('prestart')
+
+    if request.method == 'POST':
+        form = CustomLoginForm(request.POST)
+
+        if form.is_valid():
+            email = form.cleaned_data.get('email')
+            password = form.cleaned_data.get('password')
+
+            user = authenticate(request, email=email, password=password)
+
+            if user is not None:
+                login(request, user)
+                return redirect('prestart')
+            else:
+                messages.error(request, "Invalid email or password.")
+        else:
+            messages.error(request, "Invalid email or password.")
+    else:
+        form = CustomLoginForm()
+
+    return render(request, 'auditor/login.html', {'form': form})
+
+
+def register(request):
+    if request.user.is_authenticated:
+        return redirect('prestart')
+    
+    if request.method == 'POST':
+        form = CustomUserCreationForm(request.POST)
+
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            messages.success(request, "Registration successful! Welcome to the app.")
+            return redirect('prestart')
+        else:
+            messages.error(request, "Registration failed. Please correct the errors below.")
+    else:
+        form = CustomUserCreationForm()
+    
+    return render(request, 'auditor/register.html', {'form': form})
+
+@login_required
 def get_snowflake_connection(request):
     """Helper function to establish a Snowflake connection using session creds."""
     creds = request.session.get('snowflake_creds')
@@ -25,7 +75,8 @@ def get_snowflake_connection(request):
         
     return snowflake.connector.connect(**clean_config)
 
-def login_view(request):
+@login_required
+def start_view(request):
     """1) User provides Snowflake credentials via JSON file."""
     if request.method == 'POST' and 'creds_file' in request.FILES:
         try:
@@ -36,13 +87,15 @@ def login_view(request):
         except Exception as e:
             return render(request, 'auditor/login.html', {'error': f'Invalid JSON file: {str(e)}'})
             
-    return render(request, 'auditor/login.html')
+    return render(request, 'auditor/pre_start.html')
 
 def logout_view(request):
-    """Clears the session and redirects to the login page."""
+    logout(request)
     request.session.flush()
+    messages.info(request, "You have been successfully logged out.")
     return redirect('login')
 
+@login_required
 def dashboard_view(request):
     """2) Dashboard with metrics and action buttons."""
     creds = request.session.get('snowflake_creds')
@@ -79,6 +132,7 @@ def dashboard_view(request):
     }
     return render(request, 'auditor/dashboard.html', context)
 
+@login_required
 def gather_statistics(request):
     """Gathers preliminary statistics for the dashboard."""
     try:
@@ -122,6 +176,7 @@ def gather_statistics(request):
         
     return redirect('dashboard')
 
+@login_required
 def zombie_tables_report(request):
     """4) Find zombie tables using ACCOUNT_USAGE and call Gemini for a tabular report."""
     cached_report = request.session.get('zombie_report_content')
@@ -197,6 +252,7 @@ def zombie_tables_report(request):
         
     return render(request, 'auditor/report.html', {'title': 'Zombie Tables Report', 'report_content': report_content})
 
+@login_required
 def high_compute_list(request):
     """Fetch high compute queries, cache them, and display a paginated list."""
     queries = request.session.get('high_compute_queries')
@@ -247,6 +303,7 @@ def high_compute_list(request):
     
     return render(request, 'auditor/high_compute_list.html', {'page_obj': page_obj})
 
+@login_required
 def high_compute_report(request, query_id):
     """Analyze a specific query with Gemini."""
     cache_key = f'high_compute_report_{query_id}'
@@ -293,6 +350,7 @@ def high_compute_report(request, query_id):
 
     return render(request, 'auditor/report.html', {'title': 'High Compute Queries Report', 'report_content': report_content})
 
+@login_required
 def accept_suggestion(request):
     """Endpoint to handle accepting Gemini's green suggestion."""
     if request.method == 'POST':
